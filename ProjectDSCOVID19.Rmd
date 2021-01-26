@@ -1,0 +1,1095 @@
+---
+title: "ProjectDSCOVID19"
+author: "Fristiani_Vince"
+date: "1/26/2021"
+output: html_document
+---
+
+Load the following libraries. 
+#clear variabel
+```{r}
+rm(list=ls())
+```
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(timetk)   
+library(lubridate)
+library(readr)
+library(dplyr)
+library(tidyr)
+library(glmnet)
+library(prophet)
+library(tseries)
+library(Hmisc)
+```
+
+# Data Preparation dan Cleaning - Dataset COVID-19 Indonesia Time Series
+# Load data
+```{r}
+cvd <- read.csv("D:/covid_19_indonesia_time_series_all.csv")
+head(cvd)
+```
+```{r}
+glimpse(cvd)
+```
+#Hapus kolom yang tidak penting
+```{r}
+covid1  <- cvd %>%
+select(-City.or.Regency,-Province, -Country, -Continent,-Time.Zone, -Growth.Factor.of.New.Cases, -Growth.Factor.of.New.Deaths, -Special.Status, -Total.Regencies, -Total.Cities, -Total.Districts, -Total.Urban.Villages, -Total.Rural.Villages,-Area..km2.,-Population, -Population.Density,-Longitude,-Latitude,-New.Cases.per.Million, -Total.Cases.per.Million, -New.Deaths.per.Million, -Total.Deaths.per.Million, -Case.Fatality.Rate, -Case.Recovered.Rate)
+```
+```{r}
+colnames(covid1)
+```
+# Melihat nilai NA dari masing masing variabel
+```{r}
+colSums(is.na(covid1))
+```
+# Rubah nama variabel, yang sulit dibaca di pahami
+```{r}
+colnames(covid1)
+```
+# Rubah kolom Date jadi mudah dibaca
+```{r}
+colnames(covid1)[colnames(covid1) == "ï..Date"] = "Date"
+``` 
+```{r}
+colnames(covid1)
+```
+# Megganti type untuk date
+```{r}
+glimpse(covid1)
+```
+```{r}
+covid <- covid1 %>% 
+  mutate(Date = mdy (Date)) %>% 
+  arrange(Date)
+covid
+```
+```{r}
+covid$Date <- as.Date(covid$Date)
+```
+```{r}
+# order based on covid$date
+covid <- covid[order(covid$Date), ]
+glimpse(covid)
+```
+# Untuk melihat 6 data teratas
+```{r}
+head(covid)
+```
+# Untuk melihat 6 data terbawah
+```{r}
+tail(covid)
+```
+# Melihat statistik deskriptif dengan fungsi summary
+```{r}
+summary(covid)
+```
+# Melihat statistik deskriptif dengan fungsi describe
+```{r}
+describe(covid)
+```
+# Untuk menentukan apakah data stationer atau tidak.
+```{r}
+adf.test(covid$Total.Cases)
+adf.test(covid$Total.Deaths)
+adf.test(covid$Total.Recovered)
+adf.test(covid$Total.Active.Cases)
+```
+###### VISUALISASI
+# Total kasus berdasarkan provinsi dengan jumlah penduduk terbanyak di Indonesia
+```{r}
+targetLocation <- c( "DKI Jakarta", "Jawa Timur", "Jawa Tengah", "Jawa Barat", "Sumatera Utara")
+target <- subset(covid, Location %in% targetLocation)
+ggplot (data=target, 
+        mapping=aes(x=Date, y=Total.Cases, color=Location)) + geom_line() + 
+    theme_minimal()
+ 
+```
+# A. INDONESIA 
+# 1. Total kasus indonesia
+```{r}
+indo_cases1 <- subset(covid, Location=="Indonesia")
+plot(x=indo_cases1$Date, y=indo_cases1$New.Cases)
+```
+```{r}
+indo_cases<-indo_cases1 %>% 
+group_by(Date) %>% 
+  summarise(
+    Total.Cases = (Total.Cases)
+  )
+indo_cases
+```
+# 2. Total meninggal indonesia
+```{r}
+indo_deaths <- subset(covid, Location=="Indonesia")
+plot(x=indo_deaths$Date, y=indo_deaths$New.Deaths)
+```
+# 3. Total meninggal indonesia
+```{r}
+indo_recovered <- subset(covid, Location=="Indonesia")
+plot(x=indo_recovered$Date, y=indo_recovered$New.Recovered)
+```
+# 4. Total aktif indonesia
+```{r}
+indo_active <- subset(covid, Location=="Indonesia")
+plot(x=indo_active$Date, y=indo_active$New.Active.Cases)
+```
+#visualisasi total,aktif,sembuh dan meninggal di indonesia
+```{r}
+options(scipen=1)
+plot(indo_cases$Date, indo_cases$Total.Cases, 
+     pch=19, 
+     cex=0.3, 
+     main="Kasus COVID-19 di Indonesia",
+     sub="Data terakhir 31 Desember 2020",
+     las=1,
+     xlab="", ylab="")
+lines(indo_cases$Date, indo_cases$Total.Cases, col="cornsilk3", lwd=2)
+lines(indo_recovered$Date, indo_recovered$Total.Recovered, col="lightblue", lwd=2)
+lines(indo_deaths$Date, indo_deaths$Total.Deaths, col="lightpink", lwd=2)
+lines(indo_active$Date, indo_active$Total.Active.Cases, col="lightgreen", lwd=2)
+legend("top", fill=c("cornsilk3", "lightblue", "lightpink","lightgreen"), legend=c("Total Kasus", "Sembuh", "Meninggal","Aktif"))
+```
+
+# B. SUMATERA UTARA
+# 1. Total kasus di Sumatera Utara
+```{r}
+su_cases <- subset(covid, Location=="Sumatera Utara")
+plot(x=su_cases$Date, y=su_cases$New.Cases)
+```
+# 2. total meninggal di Sumatera Utara
+```{r}
+su_deaths <- subset(covid, Location=="Sumatera Utara")
+plot(x=su_deaths$Date, y=su_deaths$New.Deaths)
+```
+# 3. Total sembuh di Sumatera Utara
+```{r}
+su_recovered <- subset(covid, Location=="Sumatera Utara")
+plot(x=su_recovered$Date, y=su_recovered$New.Recovered)
+```
+# 4. Total aktif di Sumatera Utara
+```{r}
+su_active <- subset(covid, Location=="Sumatera Utara")
+plot(x=su_active$Date, y=su_active$New.Active.Cases)
+```
+# Total, meninggal, sembuh, dan aktif di Sumatera Utara
+```{r}
+options(scipen=1)
+plot(su_cases$Date, su_cases$Total.Cases, 
+     pch=19, 
+     cex=0.3, 
+     main="Kasus COVID-19 di Sumatera Utara",
+     sub="Data terakhir 31 Desember 2020",
+     las=1,
+     xlab="", ylab="")
+lines(su_cases$Date, su_cases$Total.Cases, col="cornsilk3", lwd=2)
+lines(su_cases$Date, su_cases$Total.Recovered, col="lightblue", lwd=2)
+lines(su_cases$Date, su_cases$Total.Deaths, col="lightpink", lwd=2)
+lines(su_cases$Date, su_cases$Total.Active.Cases, col="lightgreen", lwd=2)
+legend("top", fill=c("cornsilk3", "lightblue", "lightpink", "lightgreen"), legend=c("Total Kasus", "Sembuh", "Meninggal","Aktif"))
+```
+
+# Forecasting with Prophet Facebook
+# 1. prophet dengan total casus
+```{r}
+cvd_indo_case <- indo_cases%>%
+  rename(
+    ds="Date",
+    y= "Total.Cases" 
+  )
+view(cvd_indo_case)
+```
+# Memodelkan keseluruhan data
+```{r}
+model_indo_case <- prophet() %>%
+  fit.prophet(cvd_indo_case)
+```
+# Periode prediksi untuk 1 tahun kedepan 
+```{r}
+future_indo_case<- make_future_dataframe(model_indo_case, periods = 365, freq = "day")
+view(future_indo_case)
+```
+# Visualisasi hasil peralaman untuk 1 tahun kedepan
+```{r}
+forecast_indo_case <- predict(model_indo_case, future_indo_case)
+dyplot.prophet(model_indo_case, forecast_indo_case)
+```
+# Visualisasi komponen model dan forecast
+```{r}
+prophet_plot_components(model_indo_case, forecast_indo_case)
+```
+# Untuk melihat keterangan nilai dari komponen prophet
+```{r}
+view(forecast_indo_case)
+```
+```{r}
+tail(forecast_indo_case)
+```
+# Untuk melihat nilai ds, trend, weekly, yearly, yhat
+```{r}
+tail(forecast_indo_case[c('ds', 'trend', 'weekly', 'yhat')])
+```
+```{r}
+View(forecast_indo_case)
+```
+# changepoint dengan threshold
+```{r}
+plot(model_indo_case, forecast_indo_case) + 
+  add_changepoints_to_plot(model_indo_case, threshold = 0)
+```
+# Model forecast evaluation
+```{r}
+cutoff <- dmy("01-10-2020") 
+train_indo_case <- indo_cases %>% 
+  filter( 
+    Date < cutoff 
+  ) %>% 
+  rename( 
+    "ds" = Date, 
+    "y" = Total.Cases 
+  ) 
+test_indo_case <- indo_cases %>% 
+  filter( 
+    Date >= cutoff 
+  ) %>% 
+  rename( 
+    "ds" = Date, 
+    "y" = Total.Cases
+  ) 
+ggplot(indo_cases, aes(x=Date, y=Total.Cases)) + 
+  geom_point(data = train_indo_case, aes(x=ds, y=y)) + 
+  geom_point(data = test_indo_case, aes(x=ds, y=y), color="tomato3")
+```
+#Model final
+```{r}
+model_final_indo_case <- prophet(changepoint.prior.scale = 0.05) %>%
+  fit.prophet(train_indo_case) 
+future_final_indo_case <- make_future_dataframe(model_final_indo_case, periods = nrow(test_indo_case) + 1) 
+forecast_final_indo_case <- predict(model_final_indo_case, future_final_indo_case) 
+plot(model_final_indo_case, forecast_final_indo_case) 
+```
+```{r}
+plot(model_final_indo_case, forecast_final_indo_case) + 
+  geom_point(data = test_indo_case %>% mutate(ds = as.POSIXct(ds)), aes(x=ds, y=y), color="tomato3")
+```
+# Menentukan nilai MAPE
+```{r}
+df.cv_indo_case <- cross_validation(model_final_indo_case, initial = 60, period = 30, horizon = 100, units = 'days')
+head(df.cv_indo_case)
+```
+```{r}
+tail(df.cv_indo_case)
+```
+```{r}
+df.cv_indo_case
+```
+```{r}
+df.p_indo_case <- performance_metrics(df.cv_indo_case)
+df.p_indo_case
+```
+# Rata_rata MAPE
+```{r}
+mape<- function(y, yhat){
+  return(mean(abs(y-yhat)/y))
+}
+mape(df.cv_indo_case$y,df.cv_indo_case$yhat)
+```
+# Visualisasi nilai MAPE
+```{r}
+plot_cross_validation_metric(df.cv_indo_case, metric = 'mape')
+```
+bisa dilihat bahwa nilai rata-rata MAPE untuk model peramalam utk 100 hari berada dibawah 10%, artinya kemampuan model peramalan yang dihasilkan sangat baik
+# 2. prophet dengan total meninggal
+```{r}
+cvd_totaldeaths <- indo_deaths%>%
+  rename(
+    ds="Date",
+    y= "Total.Deaths" 
+  )
+glimpse(cvd_totaldeaths)
+```
+# Memodelkan keseluruhan data
+```{r}
+model_totaldeaths <- prophet() %>%
+  fit.prophet(cvd_totaldeaths)
+```
+# Periode prediksi untuk 1 tahun kedepan 
+```{r}
+future_totaldeaths<- make_future_dataframe(model_totaldeaths, periods = 365, freq = "day")
+view(future_totaldeaths)
+```
+# Visualisasi hasil peralaman untuk 1 tahun kedepan
+```{r}
+forecast_totaldeaths <- predict(model_totaldeaths, future_totaldeaths)
+dyplot.prophet(model_totaldeaths, forecast_totaldeaths)
+```
+# Visualisasi komponen model dan forecast
+```{r}
+prophet_plot_components(model_totaldeaths, forecast_totaldeaths)
+```
+# Untuk melihat keterangan nilai dari komponen prophet
+```{r}
+head(forecast_totaldeaths)
+```
+# Untuk melihat nilai ds, trend, weekly, yearly, yhat
+```{r}
+forecast_totaldeaths %>%
+  select(ds, trend, weekly, yhat)
+```
+# changepoint dengan threshold
+```{r}
+plot(model_totaldeaths, forecast_totaldeaths) + 
+  add_changepoints_to_plot(model_totaldeaths, threshold = 0)
+```
+# Model forecast evaluation
+```{r}
+cutoff <- dmy("01-10-2020") 
+train_totaldeaths <- indo_deaths %>% 
+  filter( 
+    Date < cutoff 
+  ) %>% 
+  rename( 
+    "ds" = Date, 
+    "y" = Total.Deaths 
+  ) 
+test_totaldeaths <- indo_deaths %>% 
+  filter( 
+    Date >= cutoff 
+  ) %>% 
+  rename( 
+    "ds" = Date, 
+    "y" = Total.Deaths
+  ) 
+ggplot(indo_deaths, aes(x=Date, y=Total.Deaths)) + 
+  geom_point(data = train_totaldeaths, aes(x=ds, y=y)) + 
+  geom_point(data = test_totaldeaths, aes(x=ds, y=y), color="tomato3")
+```
+#Model final
+```{r}
+model_final_totaldeaths <- prophet(changepoint.prior.scale = 0.05) %>%
+  fit.prophet(train_totaldeaths) 
+future_final_totaldeaths <- make_future_dataframe(model_final_totaldeaths, periods = nrow(test_totaldeaths) + 1) 
+forecast_final_totaldeaths <- predict(model_final_totaldeaths, future_final_totaldeaths) 
+plot(model_final_totaldeaths, forecast_final_totaldeaths) 
+```
+```{r}
+plot(model_final_totaldeaths, forecast_final_totaldeaths) + 
+  geom_point(data = test_totaldeaths %>% mutate(ds = as.POSIXct(ds)), aes(x=ds, y=y), color="tomato3")
+```
+# Menentukan nilai MAPE
+```{r}
+df.cv_totaldeaths<- cross_validation(model_final_totaldeaths, initial =60, period = 30, horizon = 100, units = 'days')
+head(df.cv_totaldeaths)
+```
+```{r}
+tail(df.cv_totaldeaths)
+```
+```{r}
+df.cv_totaldeaths
+```
+```{r}
+df.p_totaldeaths <- performance_metrics(df.cv_totaldeaths)
+df.p_totaldeaths
+```
+# Rata-rata nilai MAPE
+```{r}
+mape<- function(y, yhat){
+  return(mean(abs(y-yhat)/y))
+}
+mape(df.cv_totaldeaths$y,df.cv_totaldeaths$yhat)
+```
+# Visualisasi nilai MAPE
+```{r}
+plot_cross_validation_metric(df.cv_totaldeaths, metric = 'mape')
+```
+# 3. prophet dengan total sembuh
+```{r}
+cvd_totalrecovered<- indo_recovered%>%
+  rename(
+    ds="Date",
+    y= "Total.Recovered" 
+  )
+glimpse(cvd_totalrecovered)
+```
+# Memodelkan keseluruhan data
+```{r}
+model_totalrecovered <- prophet() %>%
+  fit.prophet(cvd_totalrecovered)
+```
+# Periode prediksi untuk 1 tahun kedepan 
+```{r}
+future_totalrecovered<- make_future_dataframe(model_totalrecovered, periods = 365, freq = "day")
+glimpse(future_totalrecovered)
+```
+# Visualisasi hasil peralaman untuk 1 tahun kedepan
+```{r}
+forecast_totalrecovered <- predict(model_totalrecovered, future_totalrecovered)
+dyplot.prophet(model_totalrecovered, forecast_totalrecovered)
+```
+# Visualisasi komponen model dan forecast
+```{r}
+prophet_plot_components(model_totalrecovered, forecast_totalrecovered)
+```
+# Untuk melihat keterangan nilai dari komponen prophet
+```{r}
+head(forecast_totalrecovered)
+```
+# Untuk melihat nilai ds, trend, weekly, yearly, yhat
+```{r}
+forecast_totalrecovered %>%
+  select(ds, trend, weekly, yhat)
+```
+# changepoint dengan threshold
+```{r}
+plot(model_totalrecovered, forecast_totalrecovered) + 
+  add_changepoints_to_plot(model_totalrecovered, threshold = 0)
+```
+# Model forecast evaluation
+```{r}
+cutoff <- dmy("01-10-2020") 
+train_totalrecovered <- indo_recovered %>% 
+  filter( 
+    Date < cutoff 
+  ) %>% 
+  rename( 
+    "ds" = Date, 
+    "y" = Total.Recovered 
+  ) 
+test_totalrecovered <- indo_recovered %>% 
+  filter( 
+    Date >= cutoff 
+  ) %>% 
+  rename( 
+    "ds" = Date, 
+    "y" = Total.Recovered
+  ) 
+ggplot(indo_recovered, aes(x=Date, y=Total.Recovered)) + 
+  geom_point(data = train_totalrecovered, aes(x=ds, y=y)) + 
+  geom_point(data = test_totalrecovered, aes(x=ds, y=y), color="tomato3")
+```
+#Model final
+```{r}
+model_final_totalrecovered <- prophet(changepoint.prior.scale = 0.05) %>%
+  fit.prophet(train_totalrecovered) 
+future_final_totalrecovered <- make_future_dataframe(model_final_totalrecovered, periods = nrow(test_totalrecovered) + 1) 
+forecast_final_totalrecovered <- predict(model_final_totalrecovered, future_final_totalrecovered) 
+plot(model_final_totalrecovered, forecast_final_totalrecovered) 
+```
+```{r}
+plot(model_final_totalrecovered, forecast_final_totalrecovered) + 
+  geom_point(data = test_totalrecovered %>% mutate(ds = as.POSIXct(ds)), aes(x=ds, y=y), color="tomato3")
+```
+# Menentukan nilai MAPE
+```{r}
+df.cv_totalrecovered<- cross_validation(model_final_totalrecovered, initial =60, period = 30, horizon = 100, units = 'days')
+head(df.cv_totalrecovered)
+```
+```{r}
+tail(df.cv_totalrecovered)
+```
+```{r}
+df.cv_totalrecovered
+```
+```{r}
+df.p_totalrecovered <- performance_metrics(df.cv_totalrecovered)
+df.p_totalrecovered
+```
+# Rata-rata nilai MAPE
+```{r}
+mape<- function(y, yhat){
+  return(mean(abs(y-yhat)/y))
+}
+mape(df.cv_totalrecovered$y,df.cv_totalrecovered$yhat)
+```
+# Visualisasi nilai MAPE
+```{r}
+plot_cross_validation_metric(df.cv_totalrecovered, metric = 'mape')
+```
+# 4. prophet dengan total active
+```{r}
+cvd_totalactive<- indo_active%>%
+  rename(
+    ds="Date",
+    y= "Total.Active.Cases" 
+  )
+glimpse(cvd_totalactive)
+```
+# Memodelkan keseluruhan data
+```{r}
+model_totalactive <- prophet() %>%
+  fit.prophet(cvd_totalactive)
+```
+# Periode prediksi untuk 1 tahun kedepan 
+```{r}
+future_totalactive<- make_future_dataframe(model_totalactive, periods = 365, freq = "day")
+glimpse(future_totalactive)
+```
+# Visualisasi hasil peralaman untuk 1 tahun kedepan
+```{r}
+forecast_totalactive<- predict(model_totalactive, future_totalactive)
+dyplot.prophet(model_totalactive, forecast_totalactive)
+```
+# Visualisasi komponen model dan forecast
+```{r}
+prophet_plot_components(model_totalactive, forecast_totalactive)
+```
+# Untuk melihat keterangan nilai dari komponen prophet
+```{r}
+head(forecast_totalactive)
+```
+# Untuk melihat nilai ds, trend, weekly, yearly, yhat
+```{r}
+forecast_totalactive %>%
+  select(ds, trend, weekly, yhat)
+```
+# changepoint dengan threshold
+```{r}
+plot(model_totalactive, forecast_totalactive) + 
+  add_changepoints_to_plot(model_totalactive, threshold = 0)
+```
+# Model forecast evaluation
+```{r}
+cutoff <- dmy("01-10-2020") 
+train_totalactive <- indo_active %>% 
+  filter( 
+    Date < cutoff 
+  ) %>% 
+  rename( 
+    "ds" = Date, 
+    "y" = Total.Active.Cases 
+  ) 
+test_totalactive <- indo_active %>% 
+  filter( 
+    Date >= cutoff 
+  ) %>% 
+  rename( 
+    "ds" = Date, 
+    "y" = Total.Active.Cases
+  ) 
+ggplot(indo_active, aes(x=Date, y=Total.Active.Cases)) + 
+  geom_point(data = train_totalactive, aes(x=ds, y=y)) + 
+  geom_point(data = test_totalactive, aes(x=ds, y=y), color="tomato3")
+```
+#Model final
+```{r}
+model_final_totalactive <- prophet(changepoint.prior.scale = 0.05) %>%
+  fit.prophet(train_totalactive) 
+future_final_totalactive <- make_future_dataframe(model_final_totalactive, periods = nrow(test_totalactive) + 1) 
+forecast_final_totalactive <- predict(model_final_totalactive, future_final_totalactive) 
+plot(model_final_totalactive, forecast_final_totalactive) 
+```
+```{r}
+plot(model_final_totalactive, forecast_final_totalactive) + 
+  geom_point(data = test_totalactive %>% mutate(ds = as.POSIXct(ds)), aes(x=ds, y=y), color="tomato3")
+```
+# Menentukan nilai MAPE
+```{r}
+df.cv_totalactive<- cross_validation(model_final_totalactive, initial =60, period = 30, horizon = 100, units = 'days')
+head(df.cv_totalactive)
+```
+```{r}
+tail(df.cv_totalactive)
+```
+```{r}
+df.cv_totalactive
+```
+```{r}
+df.p_totalactive <- performance_metrics(df.cv_totalactive)
+df.p_totalactive
+```
+# Rata-rata nilai MAPE
+```{r}
+mape<- function(y, yhat){
+  return(mean(abs(y-yhat)/y))
+}
+mape(df.cv_totalactive$y,df.cv_totalactive$yhat)
+```
+# Visualisasi nilai MAPE
+```{r}
+plot_cross_validation_metric(df.cv_totalactive, metric = 'mape')
+```
+
+# 1. prophet dengan total case su
+```{r}
+cvd_su_case <- su_cases%>%
+  rename(
+    ds="Date",
+    y= "Total.Cases" 
+  )
+glimpse(cvd_su_case)
+```
+# Memodelkan keseluruhan data
+```{r}
+model_su_case <- prophet() %>%
+  fit.prophet(cvd_su_case)
+```
+# Periode prediksi untuk 1 tahun kedepan 
+```{r}
+future_su_case<- make_future_dataframe(model_su_case, periods = 365, freq = "day")
+glimpse(future_su_case)
+```
+# Visualisasi hasil peralaman untuk 1 tahun kedepan
+```{r}
+forecast_su_case <- predict(model_su_case, future_su_case)
+dyplot.prophet(model_su_case, forecast_su_case)
+```
+# Visualisasi komponen model dan forecast
+```{r}
+prophet_plot_components(model_su_case, forecast_su_case)
+```
+# Untuk melihat keterangan nilai dari komponen prophet
+```{r}
+head(forecast_su_case)
+```
+# Untuk melihat nilai ds, trend, weekly, yearly, yhat
+```{r}
+tail(forecast_su_case[c('ds', 'trend', 'weekly', 'yhat')])
+```
+# changepoint dengan threshold
+```{r}
+plot(model_su_case, forecast_su_case) + 
+  add_changepoints_to_plot(model_su_case, threshold = 0)
+```
+# Model forecast evaluation
+```{r}
+cutoff <- dmy("01-10-2020") 
+train_su_case <- su_cases %>% 
+  filter( 
+    Date < cutoff 
+  ) %>% 
+  rename( 
+    "ds" = Date, 
+    "y" = Total.Cases 
+  ) 
+test_su_case <- su_cases %>% 
+  filter( 
+    Date >= cutoff 
+  ) %>% 
+  rename( 
+    "ds" = Date, 
+    "y" = Total.Cases
+  ) 
+ggplot(su_cases, aes(x=Date, y=Total.Cases)) + 
+  geom_point(data = train_su_case, aes(x=ds, y=y)) + 
+  geom_point(data = test_su_case, aes(x=ds, y=y), color="tomato3")
+```
+#Model final
+```{r}
+model_final_su_case <- prophet(changepoint.prior.scale = 0.05) %>%
+  fit.prophet(train_su_case) 
+future_final_su_case <- make_future_dataframe(model_final_su_case, periods = nrow(test_su_case) + 1) 
+forecast_final_su_case <- predict(model_final_su_case, future_final_su_case) 
+plot(model_final_su_case, forecast_final_su_case) 
+```
+```{r}
+plot(model_final_su_case, forecast_final_su_case) + 
+  geom_point(data = test_su_case %>% mutate(ds = as.POSIXct(ds)), aes(x=ds, y=y), color="tomato3")
+```
+# Menentukan nilai MAPE
+```{r}
+df.cv_su_case <- cross_validation(model_final_su_case, initial =60, period = 30, horizon = 100, units = 'days')
+head(df.cv_su_case)
+```
+```{r}
+tail(df.cv_su_case)
+```
+```{r}
+df.cv_su_case
+```
+```{r}
+df.p_su_case <- performance_metrics(df.cv_su_case)
+df.p_su_case
+```
+# Rata-rata nilai MAPE
+```{r}
+mape<- function(y, yhat){
+  return(mean(abs(y-yhat)/y))
+}
+mape(df.cv_su_case$y,df.cv_su_case$yhat)
+```
+# Visualisasi nilai MAPE
+```{r}
+plot_cross_validation_metric(df.cv_su_case, metric = 'mape')
+```
+# 2. prophet dengan total meninggal
+```{r}
+cvd_su_deaths <- su_deaths%>%
+  rename(
+    ds="Date",
+    y= "Total.Deaths" 
+  )
+glimpse(cvd_su_deaths)
+```
+# Memodelkan keseluruhan data
+```{r}
+model_su_deaths <- prophet() %>%
+  fit.prophet(cvd_su_deaths)
+```
+# Periode prediksi untuk 1 tahun kedepan 
+```{r}
+future_su_deaths<- make_future_dataframe(model_su_deaths, periods = 365, freq = "day")
+glimpse(future_su_deaths)
+```
+# Visualisasi hasil peralaman untuk 1 tahun kedepan
+```{r}
+forecast_su_deaths <- predict(model_su_deaths, future_su_deaths)
+dyplot.prophet(model_su_deaths, forecast_su_deaths)
+```
+# Visualisasi komponen model dan forecast
+```{r}
+prophet_plot_components(model_su_deaths, forecast_su_deaths)
+```
+# Untuk melihat keterangan nilai dari komponen prophet
+```{r}
+head(forecast_su_deaths)
+```
+# Untuk melihat nilai ds, trend, weekly, yearly, yhat
+```{r}
+tail(forecast_su_deaths[c('ds', 'trend', 'weekly', 'yhat')])
+```
+# changepoint dengan threshold
+```{r}
+plot(model_su_deaths, forecast_su_deaths) + 
+  add_changepoints_to_plot(model_su_deaths, threshold = 0)
+```
+# Model forecast evaluation
+```{r}
+cutoff <- dmy("01-10-2020") 
+train_su_deaths <- su_deaths %>% 
+  filter( 
+    Date < cutoff 
+  ) %>% 
+  rename( 
+    "ds" = Date, 
+    "y" = Total.Deaths 
+  ) 
+test_su_deaths <- su_deaths %>% 
+  filter( 
+    Date >= cutoff 
+  ) %>% 
+  rename( 
+    "ds" = Date, 
+    "y" = Total.Deaths
+  ) 
+ggplot(su_deaths, aes(x=Date, y=Total.Deaths)) + 
+  geom_point(data = train_su_deaths, aes(x=ds, y=y)) + 
+  geom_point(data = test_su_deaths, aes(x=ds, y=y), color="tomato3")
+```
+#Model final
+```{r}
+model_final_su_deaths<- prophet(changepoint.prior.scale = 0.05) %>%
+  fit.prophet(train_su_deaths) 
+future_final_su_deaths <- make_future_dataframe(model_final_su_deaths, periods = nrow(test_su_deaths) + 1) 
+forecast_final_su_deaths <- predict(model_final_su_deaths, future_final_su_deaths) 
+plot(model_final_su_deaths, forecast_final_su_deaths) 
+```
+```{r}
+plot(model_final_su_deaths, forecast_final_su_deaths) + 
+  geom_point(data = test_su_deaths %>% mutate(ds = as.POSIXct(ds)), aes(x=ds, y=y), color="tomato3")
+```
+# Menentukan nilai MAPE
+```{r}
+df.cv_su_deaths<- cross_validation(model_final_su_deaths, initial =60, period = 30, horizon = 100, units = 'days')
+head(df.cv_su_deaths)
+```
+```{r}
+tail(df.cv_su_deaths)
+```
+```{r}
+df.cv_su_deaths
+```
+```{r}
+df.p_su_deaths <- performance_metrics(df.cv_su_deaths)
+df.p_su_deaths
+```
+# Rata-rata nilai MAPE
+```{r}
+mape<- function(y, yhat){
+  return(mean(abs(y-yhat)/y))
+}
+mape(df.cv_su_deaths$y,df.cv_su_deaths$yhat)
+```
+# Visualisasi nilai MAPE
+```{r}
+plot_cross_validation_metric(df.cv_su_deaths, metric = 'mape')
+```
+# 3. prophet dengan sembuh di sumatera
+```{r}
+cvd_su_recovered<- su_recovered%>%
+  rename(
+    ds="Date",
+    y= "Total.Recovered" 
+  )
+glimpse(su_recovered)
+```
+# Memodelkan keseluruhan data
+```{r}
+model_su_recovered <- prophet() %>%
+  fit.prophet(cvd_su_recovered)
+```
+# Periode prediksi untuk 1 tahun kedepan 
+```{r}
+future_su_recovered<- make_future_dataframe(model_su_recovered, periods = 365, freq = "day")
+glimpse(future_su_recovered)
+```
+# Visualisasi hasil peralaman untuk 1 tahun kedepan
+```{r}
+forecast_su_recovered <- predict(model_su_recovered, future_su_recovered)
+dyplot.prophet(model_su_recovered, forecast_su_recovered)
+```
+# Visualisasi komponen model dan forecast
+```{r}
+prophet_plot_components(model_su_recovered, forecast_su_recovered)
+```
+# Untuk melihat keterangan nilai dari komponen prophet
+```{r}
+head(forecast_su_recovered)
+```
+# Untuk melihat nilai ds, trend, weekly, yearly, yhat
+```{r}
+tail(forecast_su_recovered[c('ds', 'trend', 'weekly', 'yhat')])
+```
+# changepoint dengan threshold
+```{r}
+plot(model_su_recovered, forecast_su_recovered) + 
+  add_changepoints_to_plot(model_su_recovered, threshold = 0)
+```
+# Model forecast evaluation
+```{r}
+cutoff <- dmy("01-10-2020") 
+train_su_recovered <- su_recovered %>% 
+  filter( 
+    Date < cutoff 
+  ) %>% 
+  rename( 
+    "ds" = Date, 
+    "y" = Total.Recovered 
+  ) 
+test_su_recovered <- su_recovered %>% 
+  filter( 
+    Date >= cutoff 
+  ) %>% 
+  rename( 
+    "ds" = Date, 
+    "y" = Total.Recovered
+  ) 
+ggplot(su_recovered, aes(x=Date, y=Total.Recovered)) + 
+  geom_point(data = train_su_recovered, aes(x=ds, y=y)) + 
+  geom_point(data = test_su_recovered, aes(x=ds, y=y), color="tomato3")
+```
+#Model final
+```{r}
+model_final_su_recovered <- prophet(changepoint.prior.scale = 0.05) %>%
+  fit.prophet(train_su_recovered) 
+future_final_su_recovered <- make_future_dataframe(model_final_su_recovered, periods = nrow(test_su_recovered) + 1) 
+forecast_final_su_recovered <- predict(model_final_su_recovered, future_final_su_recovered) 
+plot(model_final_su_recovered, forecast_final_su_recovered) 
+```
+```{r}
+plot(model_final_su_recovered, forecast_final_su_recovered) + 
+  geom_point(data = test_su_recovered %>% mutate(ds = as.POSIXct(ds)), aes(x=ds, y=y), color="tomato3")
+```
+# Menentukan nilai MAPE
+```{r}
+df.cv_su_recovered<- cross_validation(model_final_su_recovered, initial =60, period = 30, horizon = 100, units = 'days')
+head(df.cv_su_recovered)
+```
+```{r}
+tail(df.cv_su_recovered)
+```
+```{r}
+df.cv_su_recovered
+```
+```{r}
+df.p_su_recovered <- performance_metrics(df.cv_su_recovered)
+df.p_su_recovered
+```
+# Rata-rata nilai MAPE
+```{r}
+mape<- function(y, yhat){
+  return(mean(abs(y-yhat)/y))
+}
+mape(df.cv_su_recovered$y,df.cv_su_recovered$yhat)
+```
+#Visualisasi nilai MAPE
+```{r}
+plot_cross_validation_metric(df.cv_su_recovered, metric = 'mape')
+```
+# 4. prophet dengan total active
+```{r}
+cvd_su_active<- su_active%>%
+  rename(
+    ds="Date",
+    y= "Total.Active.Cases" 
+  )
+glimpse(cvd_su_active)
+```
+# Memodelkan keseluruhan data
+```{r}
+model_su_active <- prophet() %>%
+  fit.prophet(cvd_su_active)
+```
+# Periode prediksi untuk 1 tahun kedepan 
+```{r}
+future_su_active<- make_future_dataframe(model_su_active, periods = 365, freq = "day")
+glimpse(future_su_active)
+```
+# Visualisasi hasil peralaman untuk 1 tahun kedepan
+```{r}
+forecast_su_active<- predict(model_su_active, future_su_active)
+dyplot.prophet(model_su_active, forecast_su_active)
+```
+# Visualisasi komponen model dan forecast
+```{r}
+prophet_plot_components(model_su_active, forecast_su_active)
+```
+# Untuk melihat keterangan nilai dari komponen prophet
+```{r}
+head(forecast_su_active)
+```
+# Untuk melihat nilai ds, trend, weekly, yearly, yhat
+```{r}
+tail(forecast_su_active[c('ds', 'trend', 'weekly', 'yhat')])
+```
+# changepoint dengan threshold
+```{r}
+plot(model_su_active, forecast_su_active) + 
+  add_changepoints_to_plot(model_su_active, threshold = 0)
+```
+# Model forecast evaluation
+```{r}
+cutoff <- dmy("01-10-2020") 
+train_su_active <- su_active %>% 
+  filter( 
+    Date < cutoff 
+  ) %>% 
+  rename( 
+    "ds" = Date, 
+    "y" = Total.Active.Cases 
+  ) 
+test_su_active <- su_active %>% 
+  filter( 
+    Date >= cutoff 
+  ) %>% 
+  rename( 
+    "ds" = Date, 
+    "y" = Total.Active.Cases
+  ) 
+ggplot(su_active, aes(x=Date, y=Total.Active.Cases)) + 
+  geom_point(data = train_su_active, aes(x=ds, y=y)) + 
+  geom_point(data = test_su_active, aes(x=ds, y=y), color="tomato3")
+```
+#Model final
+```{r}
+model_final_su_active <- prophet(changepoint.prior.scale = 0.05) %>%
+  fit.prophet(train_su_active) 
+future_final_su_active <- make_future_dataframe(model_final_su_active, periods = nrow(test_su_active) + 1) 
+forecast_final_su_active <- predict(model_final_su_active, future_final_su_active) 
+plot(model_final_su_active, forecast_final_su_active) 
+```
+```{r}
+plot(model_final_su_active, forecast_final_su_active) + 
+  geom_point(data = test_su_active %>% mutate(ds = as.POSIXct(ds)), aes(x=ds, y=y), color="tomato3")
+```
+```{r}
+eval_su_active <- test_su_active %>% 
+  mutate( 
+    ds = as.POSIXct(ds) 
+  ) %>% 
+  left_join(forecast_final_su_active) %>% 
+  select(ds, y, yhat, yhat_upper, yhat_lower) 
+eval_su_active
+```
+# Menentukan nilai MAPE
+```{r}
+df.cv_su_active<- cross_validation(model_final_su_active, initial =60, period = 30, horizon = 100, units = 'days')
+head(df.cv_su_active)
+```
+```{r}
+tail(df.cv_su_active)
+```
+```{r}
+df.cv_su_active
+```
+```{r}
+df.p_su_active <- performance_metrics(df.cv_su_active)
+df.p_su_active
+```
+# Rata-rata nilai MAPE
+```{r}
+mape<- function(y, yhat){
+  return(mean(abs(y-yhat)/y))
+}
+mape(df.cv_su_active$y,df.cv_su_active$yhat)
+```
+# Visualisasi nilai MAPE
+```{r}
+plot_cross_validation_metric(df.cv_su_active, metric = 'mape')
+```
+
+# visualisasi hasil prediksi total,aktif,sembuh dan meninggal di indonesia
+```{r}
+options(scipen=1)
+plot(forecast_indo_case$ds,forecast_indo_case$yhat,
+     pch=19, 
+     cex=0.1, 
+     main="Hasil Prediksi Kasus COVID-19 di Indonesia",
+     sub="Data terakhir 31 Desember 2021",
+     las= 1,
+     xlab="", ylab="")
+lines(forecast_indo_case$ds,forecast_indo_case$yhat , col="cornsilk3", lwd=2)
+lines(forecast_totalrecovered$ds,forecast_totalrecovered$yhat, col="lightblue", lwd=2)
+lines(forecast_totaldeaths$ds,forecast_totaldeaths$yhat, col="lightpink", lwd=2)
+lines(forecast_totalactive$ds, forecast_totalactive$yhat, col="lightgreen", lwd=2)
+legend("top", fill=c("cornsilk3", "lightblue", "lightpink","lightgreen"), legend=c("Total Kasus", "Sembuh", "Meninggal","Aktif"))
+```
+# visualisasi hasil prediksi total,aktif,sembuh dan meninggal di sumut
+```{r}
+options(scipen=1)
+plot(forecast_su_case$ds,forecast_su_case$yhat,
+     pch=19, 
+     cex=0.1, 
+     main="Hasil Prediksi Kasus COVID-19 di Sumatera Utara",
+     sub="Data terakhir 31 Desember 2021",
+     las= 1,
+     xlab="", ylab="")
+lines(forecast_su_case$ds,forecast_su_case$yhat , col="cornsilk3", lwd=2)
+lines(forecast_su_recovered$ds,forecast_su_recovered$yhat, col="lightblue", lwd=2)
+lines(forecast_su_deaths$ds,forecast_su_deaths$yhat, col="lightpink", lwd=2)
+lines(forecast_su_active$ds, forecast_su_active$yhat, col="lightgreen", lwd=2)
+legend("top", fill=c("cornsilk3", "lightblue", "lightpink","lightgreen"), legend=c("Total Kasus", "Sembuh", "Meninggal","Aktif"))
+```
+# Mengconversivariabel ke file csv
+```{r}
+write.table(indo_cases, file = "indo.csv",sep = ",")
+```
+```{r}
+write.table(su_cases, file = "sumut.csv",sep = ",")
+```
+```{r}
+write.table(forecast_indo_case, file = "t1.csv",sep = ",")
+```
+```{r}
+write.table(forecast_totaldeaths, file = "d1.csv",sep = ",")
+```
+```{r}
+write.table(forecast_totalrecovered, file = "r1.csv",sep = ",")
+```
+```{r}
+write.table(forecast_totalactive, file = "a1.csv",sep = ",")
+```
+```{r}
+write.table(forecast_su_case, file = "t2.csv",sep = ",")
+```
+```{r}
+write.table(forecast_su_deaths, file = "d2.csv",sep = ",")
+```
+```{r}
+write.table(forecast_su_recovered, file = "r2.csv",sep = ",")
+```
+```{r}
+write.table(forecast_su_active, file = "a28.csv",sep = ",")
+```
